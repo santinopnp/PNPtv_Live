@@ -690,8 +690,8 @@ app.post('/admin/change-password', requireAdminAuth, (req, res) => {
 // Programar mensajes desde el panel de admin
 app.post('/api/admin/schedule-message', requireAdminAuth, (req, res) => {
     const { message, intervalMinutes, recurring, performerId } = req.body;
-    if (!message || !intervalMinutes) {
-        return res.status(400).json({ error: 'message and intervalMinutes required' });
+    if (!message || intervalMinutes == null || typeof intervalMinutes !== 'number' || intervalMinutes <= 0) {
+        return res.status(400).json({ error: 'message and intervalMinutes (positive number) required' });
     }
     const task = scheduleMessage({ message, intervalMinutes: Number(intervalMinutes), recurring: !!recurring, performerId });
     res.json({ scheduled: true, taskId: task.id });
