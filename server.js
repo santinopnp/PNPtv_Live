@@ -4,6 +4,23 @@ const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
+const rateLimit = require('express-rate-limit');
+const winston = require('winston');
+
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ level, message, timestamp }) => {
+            return `${timestamp} ${level.toUpperCase()}: ${message}`;
+        })
+    ),
+    transports: [new winston.transports.Console()],
+});
+
+console.log = (...args) => logger.info(args.join(' '));
+console.error = (...args) => logger.error(args.join(' '));
+console.warn = (...args) => logger.warn(args.join(' '));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +89,16 @@ let performers = [
 
 // Middleware de compresión
 app.use(compression());
+
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.use(limiter);
 
 // Headers de seguridad específicos para Webex
 app.use(helmet({
@@ -160,8 +187,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 // Logging middleware
 app.use((req, res, next) => {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
+    logger.info(`${req.method} ${req.path} - ${req.ip}`);
     next();
 });
 
@@ -1259,7 +1285,7 @@ app.get('/verify-csp', (req, res) => {
 
 // Error handling
 app.use((err, req, res, next) => {
-    console.error('Server Error:', err);
+    logger.error(`Server Error: ${err.message}`);
     res.status(500).json({ 
         error: 'Error interno del servidor',
         message: process.env.NODE_ENV === 'development' ? err.message : 'Error interno',
@@ -1287,21 +1313,27 @@ app.use((req, res) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('🛑 SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('✅ Process terminated');
-    });
+    if (server) {
+        server.close(() => {
+            console.log('✅ Process terminated');
+        });
+    }
 });
+
 
 process.on('SIGINT', () => {
     console.log('🛑 SIGINT received, shutting down gracefully');
-    server.close(() => {
-        console.log('✅ Process terminated');
-    });
+    if (server) {
+        server.close(() => {
+            console.log('✅ Process terminated');
+        });
+    }
 });
 
-// Iniciar servidor
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`
+let server;
+if (require.main === module) {
+    server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`
 🚀 PNPtv Live Server Started Successfully!
 
 📊 Server Information:
@@ -1309,25 +1341,26 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    ├─ Environment: ${process.env.NODE_ENV || 'production'}
    ├─ Base URL: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}
    └─ Version: 2.1.0
-   
+
 🌐 Available URLs:
    ├─ Main App: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}
-   ├─ Embedded App: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/embedded  
+   ├─ Embedded App: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/embedded
    ├─ Performer App: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/performer
    ├─ Admin Panel: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/admin
    └─ Health Check: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/health
-   
+
 🔗 Webex Integration:
    ├─ Embedded App ID: ${process.env.EMBEDDED_APP_ID ? '✅ Configured' : '❌ Not configured'}
    ├─ Client ID: ${process.env.WEBEX_CLIENT_ID ? '✅ Configured' : '❌ Not configured'}
    └─ Webhook URL: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/webhook/webex
-   
+
 💳 Payment Integration:
    ├─ Bold API: ${process.env.BOLD_API_KEY ? '✅ Configured' : '❌ Not configured'}
    └─ Bold Webhook: ${process.env.BASE_URL || 'https://pnptv-live-production.up.railway.app'}/webhook/bold
-   
+
 ✅ Server ready for Webex Embedded Apps!
-    `);
-});
+        `);
+    });
+}
 
 module.exports = app;
