@@ -1475,6 +1475,11 @@ if (require.main === module) {
         ws.on('close', () => {
             global.wsClients.delete(ws);
         });
+        ws.on('error', (err) => {
+            console.error('WebSocket client error:', err);
+            global.wsClients.delete(ws);
+            ws.terminate();
+        });
     });
 }
 
