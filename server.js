@@ -1274,9 +1274,10 @@ async function processTokensPurchase(transactionData) {
 }
 
 // =============================================================================
+const WebSocket = require('ws');
+
 // FUNCIONES AUXILIARES
 // =============================================================================
-
 function broadcastPaymentUpdate(updateData) {
     if (global.wsClients && global.wsClients.size > 0) {
         const message = JSON.stringify({
@@ -1286,7 +1287,7 @@ function broadcastPaymentUpdate(updateData) {
         });
         
         global.wsClients.forEach(client => {
-            if (client.readyState === 1) {
+            if (client.readyState === WebSocket.OPEN) {
                 try {
                     client.send(message);
                 } catch (error) {
@@ -1306,9 +1307,9 @@ function broadcastChatMessage(chatData) {
             data: chatData,
             timestamp: new Date().toISOString()
         });
-
+        
         global.wsClients.forEach(client => {
-            if (client.readyState === 1) {
+            if (client.readyState === WebSocket.OPEN) {
                 try {
                     client.send(message);
                 } catch (error) {
@@ -1316,11 +1317,10 @@ function broadcastChatMessage(chatData) {
                 }
             }
         });
-
+        
         console.log(`📡 Broadcasted chat message to ${global.wsClients.size} clients`);
     }
 }
-
 // =============================================================================
 // ENDPOINTS DE PRUEBA Y MONITOREO
 // =============================================================================
