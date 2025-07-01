@@ -25,7 +25,8 @@
     "compression": "^1.7.4",
     "express-rate-limit": "^6.10.0",
     "node-fetch": "^2.7.0",
-    "winston": "^3.10.0"
+    "winston": "^3.10.0",
+    "ws": "^8.13.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
@@ -41,3 +42,4 @@
     "url": "https://github.com/tu-usuario/pnptv-live"
   }
 }
+
