@@ -1299,6 +1299,8 @@ function broadcastPaymentUpdate(updateData) {
     }
 }
 
+const WebSocket = require('ws');
+
 function broadcastChatMessage(chatData) {
     if (global.wsClients && global.wsClients.size > 0) {
         const message = JSON.stringify({
@@ -1308,7 +1310,7 @@ function broadcastChatMessage(chatData) {
         });
 
         global.wsClients.forEach(client => {
-            if (client.readyState === 1) {
+            if (client.readyState === WebSocket.OPEN) {
                 try {
                     client.send(message);
                 } catch (error) {
