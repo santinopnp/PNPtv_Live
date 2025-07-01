@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
+const WebSocket = require('ws');
 
 const logger = winston.createLogger({
     level: 'info',
@@ -86,6 +87,34 @@ let performers = [
         }
     }
 ];
+
+// Almacena tareas programadas para mensajes de chat
+const scheduledMessages = [];
+
+function scheduleMessage({ message, intervalMinutes, recurring = false, performerId = 'general' }) {
+    const task = {
+        id: crypto.randomUUID(),
+        message,
+        intervalMinutes,
+        recurring,
+        performerId,
+        nextTrigger: Date.now() + intervalMinutes * 60 * 1000
+    };
+
+    function trigger() {
+        broadcastChatMessage({ message: task.message, performerId: task.performerId });
+        if (task.recurring) {
+            task.nextTrigger = Date.now() + task.intervalMinutes * 60 * 1000;
+            task.timer = setTimeout(trigger, task.intervalMinutes * 60 * 1000);
+        } else {
+            scheduledMessages.splice(scheduledMessages.indexOf(task), 1);
+        }
+    }
+
+    task.timer = setTimeout(trigger, intervalMinutes * 60 * 1000);
+    scheduledMessages.push(task);
+    return task;
+}
 
 // Middleware de compresión
 app.use(compression());
@@ -658,6 +687,59 @@ app.post('/admin/change-password', requireAdminAuth, (req, res) => {
     });
 });
 
+// Programar mensajes desde el panel de admin
+app.post('/api/admin/schedule-message', requireAdminAuth, (req, res) => {
+    const { message, intervalMinutes, recurring, performerId } = req.body;
+    if (!message || !intervalMinutes) {
+        return res.status(400).json({ error: 'message and intervalMinutes required' });
+    }
+    const task = scheduleMessage({ message, intervalMinutes: Number(intervalMinutes), recurring: !!recurring, performerId });
+    res.json({ scheduled: true, taskId: task.id });
+});
+
+// Enviar mensaje inmediato desde admin
+app.post('/api/admin/send-message', requireAdminAuth, (req, res) => {
+    const { message, performerId } = req.body;
+    if (!message) {
+        return res.status(400).json({ error: 'message required' });
+    }
+    broadcastChatMessage({ message, performerId });
+    res.json({ sent: true });
+});
+
+// Listar mensajes programados
+app.get('/api/admin/scheduled-messages', requireAdminAuth, (req, res) => {
+    res.json(scheduledMessages.map(t => ({
+        id: t.id,
+        message: t.message,
+        intervalMinutes: t.intervalMinutes,
+        recurring: t.recurring,
+        performerId: t.performerId,
+        nextTrigger: t.nextTrigger
+    })));
+});
+
+// Endpoints para performers sin autenticación (demo)
+app.post('/api/performer/:id/schedule-message', (req, res) => {
+    const { id } = req.params;
+    const { message, intervalMinutes, recurring } = req.body;
+    if (!message || !intervalMinutes) {
+        return res.status(400).json({ error: 'message and intervalMinutes required' });
+    }
+    const task = scheduleMessage({ message, intervalMinutes: Number(intervalMinutes), recurring: !!recurring, performerId: id });
+    res.json({ scheduled: true, taskId: task.id });
+});
+
+app.post('/api/performer/:id/send-message', (req, res) => {
+    const { id } = req.params;
+    const { message } = req.body;
+    if (!message) {
+        return res.status(400).json({ error: 'message required' });
+    }
+    broadcastChatMessage({ message, performerId: id });
+    res.json({ sent: true });
+});
+
 // Health check
 app.get('/health', (req, res) => {
     const livePerformers = performers.filter(p => p.isLive).length;
@@ -1217,6 +1299,28 @@ function broadcastPaymentUpdate(updateData) {
     }
 }
 
+function broadcastChatMessage(chatData) {
+    if (global.wsClients && global.wsClients.size > 0) {
+        const message = JSON.stringify({
+            type: 'chat_message',
+            data: chatData,
+            timestamp: new Date().toISOString()
+        });
+
+        global.wsClients.forEach(client => {
+            if (client.readyState === 1) {
+                try {
+                    client.send(message);
+                } catch (error) {
+                    console.error('Error sending WebSocket message:', error);
+                }
+            }
+        });
+
+        console.log(`📡 Broadcasted chat message to ${global.wsClients.size} clients`);
+    }
+}
+
 // =============================================================================
 // ENDPOINTS DE PRUEBA Y MONITOREO
 // =============================================================================
@@ -1360,6 +1464,17 @@ if (require.main === module) {
 
 ✅ Server ready for Webex Embedded Apps!
         `);
+    });
+
+    // Inicializar WebSocket server para chat y notificaciones
+    const wss = new WebSocket.Server({ server });
+    global.wsClients = new Set();
+
+    wss.on('connection', ws => {
+        global.wsClients.add(ws);
+        ws.on('close', () => {
+            global.wsClients.delete(ws);
+        });
     });
 }
 
