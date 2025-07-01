@@ -1303,27 +1303,30 @@ function broadcastPaymentUpdate(updateData) {
     }
 }
 
-function broadcastChatMessage(chatData) {
-    if (global.wsClients && global.wsClients.size > 0) {
-        const message = JSON.stringify({
-            type: 'chat_message',
-            data: chatData,
-            timestamp: new Date().toISOString()
-        });
-
-        global.wsClients.forEach(client => {
-            if (client.readyState === 1) {
-                try {
-                    client.send(message);
-                } catch (error) {
-                    console.error('Error sending WebSocket message:', error);
-                }
-            }
-        });
-
-        console.log(`📡 Broadcasted chat message to ${global.wsClients.size} clients`);
-    }
-}
++// Ensure WebSocket is imported or available in this scope
++const WebSocket = require('ws');
++
++function broadcastChatMessage(chatData) {
++    if (global.wsClients && global.wsClients.size > 0) {
++        const message = JSON.stringify({
++            type: 'chat_message',
++            data: chatData,
++            timestamp: new Date().toISOString()
++        });
++
++        global.wsClients.forEach(client => {
++            if (client.readyState === WebSocket.OPEN) {
++                try {
++                    client.send(message);
++                } catch (error) {
++                    console.error('Error sending WebSocket message:', error);
++                }
++            }
++        });
++
++        console.log(`📡 Broadcasted chat message to ${global.wsClients.size} clients`);
++    }
++}
 
 // =============================================================================
 // ENDPOINTS DE PRUEBA Y MONITOREO
