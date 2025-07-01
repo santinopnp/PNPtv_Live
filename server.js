@@ -92,6 +92,10 @@ let performers = [
 const scheduledMessages = [];
 
 function scheduleMessage({ message, intervalMinutes, recurring = false, performerId = 'general' }) {
+    const MIN_INTERVAL_MINUTES = 1;
+    if (typeof intervalMinutes !== 'number' || intervalMinutes < MIN_INTERVAL_MINUTES) {
+        throw new Error(`intervalMinutes must be at least ${MIN_INTERVAL_MINUTES} minute(s).`);
+    }
     const task = {
         id: crypto.randomUUID(),
         message,
